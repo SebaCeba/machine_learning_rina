@@ -1,0 +1,79 @@
+.chart-container {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  margin-bottom: 2rem;
+}
+
+.chart-title {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2d3748;
+}
+
+.custom-tooltip {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.tooltip-date {
+  font-weight: 600;
+  color: #2d3748;
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.tooltip-value {
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+}
+
+.tooltip-value.historical {
+  color: #48bb78;
+  font-weight: 600;
+}
+
+.tooltip-value.forecast {
+  color: #667eea;
+  font-weight: 600;
+}
+
+.tooltip-range {
+  margin: 0.25rem 0;
+  font-size: 0.85rem;
+  color: #718096;
+}
+
+.tooltip-badge {
+  display: inline-block;
+  margin: 0.25rem 0.25rem 0 0;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.tooltip-badge.holiday {
+  background: #fed7d7;
+  color: #c53030;
+}
+
+.tooltip-badge.weekend {
+  background: #e6fffa;
+  color: #234e52;
+}
+
+@media (max-width: 768px) {
+  .chart-container {
+    padding: 1rem;
+  }
+  
+  .chart-title {
+    font-size: 1.25rem;
+  }
+}
