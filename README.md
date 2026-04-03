@@ -1,128 +1,92 @@
 # Sales Forecasting Tool
 
-Aplicación Flask para forecasting de ventas con machine learning.
-
-## ⚠️ IMPORTANTE - Error de Instalación en Windows
-
-Si ejecutaste `start.bat` y te dio error de compilación, **es normal**.
-
-**SOLUCIÓN RÁPIDA:** Lee [LEEME_PRIMERO.txt](LEEME_PRIMERO.txt) o [SOLUCION_ERROR.md](SOLUCION_ERROR.md)
+Aplicación Flask para forecasting de ventas con machine learning (Holt-Winters).
 
 ## 🚀 Inicio Rápido
 
-**Versión Simple (RECOMENDADO) ✅**
-```bash
-start_simple.bat
-```
-- Instalación fácil, sin problemas
-- Usa algoritmo Holt-Winters
-- Precisión similar a Prophet
-
-**Versión Avanzada (Requiere configuración)**
+**Windows:**
 ```bash
 start.bat
 ```
-- Usa Prophet
-- Requiere compilador de C en Windows
 
----
+**Manual:**
+```bash
+python -m venv venv
+venv\Scripts\activate          # Windows
+source venv/bin/activate       # Linux/Mac
+pip install -r requirements.txt
+python main.py
+```
 
-## Project Structure
+Abre tu navegador en: **http://localhost:5000**
+
+## 📋 Estructura del Proyecto
 
 ```
 machine_learning_rina/
 ├── app/
-│   ├── __init__.py
-│   ├── routes.py
-│   ├── model.py
-│   └── data_loader.py
+│   ├── __init__.py          # Flask app factory
+│   ├── routes.py            # Upload y forecast endpoints
+│   ├── model.py             # Holt-Winters forecasting
+│   └── data_loader.py       # CSV parsing y time series
 ├── templates/
-│   └── index.html
+│   └── index.html           # Interfaz web
 ├── data/
-├── models/
-├── main.py
-├── requirements.txt
-└── .gitignore
+│   └── sample_bookings.csv  # Archivo de ejemplo
+├── models/                  # Modelos entrenados (.pkl)
+├── main.py                  # Entry point
+├── requirements.txt         # Dependencias
+├── start.bat                # Inicio automático (Windows)
+└── README.md
 ```
 
-## Quick Start (Windows)
+## 📝 Formato CSV
 
-**Option 1: One-click startup**
-```bash
-start.bat
-```
-This will automatically create the virtual environment, install dependencies, and start the server.
+Tu archivo CSV debe incluir estas columnas:
+- `check_in`: Fecha check-in (DD-MM-YYYY o YYYY-MM-DD)
+- `check_out`: Fecha check-out  
+- `noches`: Número de noches (0 = cancelación)
+- `ingresos_total`: Ingresos totales
 
-**Option 2: Manual installation**
-```bash
-install.bat
-start.bat
-```
+**Separador:** Coma (,) o punto y coma (;)
 
-## Manual Installation
-
-1. Create virtual environment:
-```bash
-python -m venv venv
-```
-
-2. Activate virtual environment:
-```bash
-# Windows
-venv\Scripts\activate
-
-# Linux/Mac
-source venv/bin/activate
-```
-
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-## Running the Application
-
-```bash
-python main.py
-```
-
-The app will be available at: http://localhost:5000
-
-## CSV Format
-
-Your CSV file must include these columns:
-- `check_in`: Check-in date (YYYY-MM-DD)
-- `check_out`: Check-out date (YYYY-MM-DD)
-- `noches`: Number of nights
-- `ingresos_total`: Total revenue
-
-Example:
+**Ejemplo:**
 ```csv
 check_in,check_out,noches,ingresos_total
-2024-01-01,2024-01-03,2,250.00
-2024-01-05,2024-01-08,3,450.00
+15-04-2022,18-04-2022,4,350000
+27-06-2022,01-07-2022,4,578580
 ```
 
-## Features
+## ✨ Características
 
-- CSV file upload
-- Data parsing and validation
-- Daily time series conversion
-- Prophet-based forecasting
-- 30-day forecast generation
-- Model persistence (.pkl files)
-- Simple HTML interface with tables
+- ✅ Upload de CSV (hasta 16MB)
+- ✅ Soporta separadores: `,` y `;`
+- ✅ Parseo robusto de fechas
+- ✅ Manejo de cancelaciones (noches=0)
+- ✅ Forecast de 30 días con Holt-Winters
+- ✅ Intervalos de confianza
+- ✅ Persistencia de modelos (.pkl)
+- ✅ Interfaz web simple
 
-## Usage
+## 🔧 Uso
 
-1. Open http://localhost:5000
-2. Upload CSV file with historical bookings
-3. View historical data and forecast results
-4. Trained models are saved in `models/` folder
+1. Ejecuta `start.bat` (Windows) o `python main.py`
+2. Abre http://localhost:5000
+3. Sube tu CSV con datos históricos
+4. Visualiza el forecast de 30 días
+5. Los modelos se guardan en `models/`
 
-## Notes
+## 📦 Dependencias
 
-- Maximum file size: 16MB
-- No authentication required
-- Models are timestamped and saved automatically
-- Revenue is distributed evenly across nights stayed
+- Flask 3.1.3
+- pandas 3.0.2
+- numpy 2.4.4
+- scipy 1.17.1
+- statsmodels 0.14.6
+
+## 📄 Notas
+
+- Máximo tamaño de archivo: 16MB
+- No requiere autenticación
+- Las cancelaciones (noches=0) se excluyen automáticamente
+- Los ingresos se distribuyen uniformemente por noche

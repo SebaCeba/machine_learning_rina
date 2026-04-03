@@ -1,53 +1,55 @@
 @echo off
 echo ====================================
-echo Sales Forecasting Tool - Startup
+echo Sales Forecasting Tool
 echo ====================================
 echo.
 
 REM Check if virtual environment exists
-if not exist "venv\Scripts\activate.bat" (
-    echo [1/3] Creating virtual environment...
+if not exist "venv\Scripts\python.exe" (
+    echo Creando entorno virtual...
     python -m venv venv
     if errorlevel 1 (
-        echo ERROR: Failed to create virtual environment
+        echo ERROR: No se pudo crear el entorno virtual
+        echo Asegurate de tener Python instalado
         pause
         exit /b 1
     )
-    echo Virtual environment created successfully.
     echo.
-)
-
-REM Activate virtual environment
-echo [2/3] Activating virtual environment...
-call venv\Scripts\activate.bat
-
-REM Check if dependencies are installed
-python -c "import flask" 2>nul
-if errorlevel 1 (
-    echo.
-    echo [3/3] Installing dependencies...
-    echo This may take a few minutes...
-    pip install -r requirements.txt
+    
+    echo Instalando dependencias...
+    venv\Scripts\python.exe -m pip install --upgrade pip
+    venv\Scripts\pip.exe install -r requirements.txt
     if errorlevel 1 (
-        echo ERROR: Failed to install dependencies
+        echo ERROR: Fallo la instalacion de dependencias
         pause
         exit /b 1
     )
-    echo Dependencies installed successfully.
-    echo.
-) else (
-    echo [3/3] Dependencies already installed.
     echo.
 )
 
-REM Start the application
+REM Check if Flask is installed
+venv\Scripts\pip.exe show Flask >nul 2>&1
+if errorlevel 1 (
+    echo Instalando dependencias...
+    venv\Scripts\pip.exe install -r requirements.txt
+    if errorlevel 1 (
+        echo ERROR: Fallo la instalacion
+        pause
+        exit /b 1
+    )
+    echo.
+)
+
 echo ====================================
-echo Starting Flask application...
-echo Open your browser at: http://localhost:5000
-echo Press Ctrl+C to stop the server
+echo Iniciando aplicacion...
+echo ====================================
+echo.
+echo Abre tu navegador en: http://localhost:5000
+echo.
+echo Presiona Ctrl+C para detener el servidor
 echo ====================================
 echo.
 
-python main.py
+venv\Scripts\python.exe main.py
 
 pause
