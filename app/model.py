@@ -4,6 +4,7 @@ import numpy as np
 import os
 from datetime import datetime
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 try:
     from prophet import Prophet
@@ -272,6 +273,223 @@ def train_and_forecast_occupancy(
         'model': model,
         'forecast': forecast_output,
         'historical': train_df
+    }
+    
+    return results
+
+
+def train_and_forecast_sarimax(
+    features_filepath=None,
+    features_df=None,
+    forecast_horizon=60,
+    output_dir='data/outputs'
+):
+    """
+    Train a SARIMAX model on daily occupancy data with Chilean calendar features.
+    WINDOWS-COMPATIBLE alternative to Prophet.
+    
+    SARIMAX (Seasonal ARIMA with eXogenous variables) supports external regressors
+    like Prophet but works on Windows without C++ compilation requirements.
+    
+    Args:
+        features_filepath (str): Path to features CSV (optional if features_df provided)
+        features_df (pd.DataFrame): Features dataframe (optional if features_filepath provided)
+        forecast_horizon (int): Number of days to forecast (default: 60)
+        output_dir (str): Directory to save forecast output (default: 'data/outputs')
+    
+    Returns:
+        dict: {
+            'model': Trained SARIMAX model,
+            'forecast': Forecast dataframe with predictions,
+            'historical': Historical data used for training
+        }
+    
+    Features used as exogenous variables:
+        - is_holiday: Official Chilean public holidays
+        - is_sandwich: Sandwich days (behavioral bridge days)
+        - is_weekend: Saturday/Sunday indicator
+    
+    Model specification:
+        - order=(1, 0, 1): ARMA(1,1) for non-seasonal component
+        - seasonal_order=(1, 0, 1, 7): Seasonal ARMA(1,1) with 7-day period (weekly)
+        - exog: External regressors (holidays, sandwiches, weekends)
+    
+    Output columns:
+        - ds: Date
+        - yhat: Predicted occupancy
+        - yhat_lower: Lower bound of prediction interval
+        - yhat_upper: Upper bound of prediction interval
+        - is_holiday, is_sandwich, is_weekend: Future regressor values
+    
+    Saves forecast to: {output_dir}/forecast_occupancy_sarimax_YYYYMMDD.csv
+    """
+    # Load features data
+    if features_df is not None:
+        df = features_df.copy()
+    elif features_filepath is not None:
+        df = pd.read_csv(features_filepath)
+        df['ds'] = pd.to_datetime(df['ds'])
+    else:
+        raise ValueError("Must provide either features_filepath or features_df")
+    
+    # Validate required columns
+    required_cols = ['ds', 'y', 'is_holiday', 'is_sandwich', 'is_weekend']
+    missing = [col for col in required_cols if col not in df.columns]
+    if missing:
+        raise ValueError(f"Features dataset missing required columns: {missing}")
+    
+    # Prepare training data
+    train_df = df[['ds', 'y', 'is_holiday', 'is_sandwich', 'is_weekend']].copy()
+    train_df = train_df.sort_values('ds').reset_index(drop=True)
+    
+    # Prepare endogenous (y) and exogenous (regressors) variables
+    endog = train_df['y'].values
+    exog = train_df[['is_holiday', 'is_sandwich', 'is_weekend']].values
+    
+    # Initialize SARIMAX model
+    print(f"Training SARIMAX model on {len(train_df)} days of data...")
+    print("  Model: SARIMAX(1,0,1)x(1,0,1,7) with external regressors")
+    print("  Regressors: is_holiday, is_sandwich, is_weekend")
+    
+    try:
+        model = SARIMAX(
+            endog=endog,
+            exog=exog,
+            order=(1, 0, 1),              # (p, d, q) - ARMA(1,1) non-seasonal
+            seasonal_order=(1, 0, 1, 7),  # (P, D, Q, s) - Weekly seasonal ARMA(1,1)
+            enforce_stationarity=False,
+            enforce_invertibility=False
+        )
+        
+        fitted_model = model.fit(disp=False)
+        print(f"✓ Model training complete (AIC: {fitted_model.aic:.2f})")
+        
+    except Exception as e:
+        # Fallback to simpler model if seasonal doesn't converge
+        print(f"⚠ Seasonal model failed ({e}), falling back to non-seasonal ARIMA")
+        model = SARIMAX(
+            endog=endog,
+            exog=exog,
+            order=(1, 0, 1),
+            seasonal_order=(0, 0, 0, 0),
+            enforce_stationarity=False,
+            enforce_invertibility=False
+        )
+        fitted_model = model.fit(disp=False)
+        print(f"✓ Model training complete (AIC: {fitted_model.aic:.2f})")
+    
+    # Prepare future exogenous variables
+    last_date = train_df['ds'].max()
+    future_dates = pd.date_range(
+        start=last_date + pd.Timedelta(days=1),
+        periods=forecast_horizon,
+        freq='D'
+    )
+    
+    # Create future dataframe with dates
+    future_df = pd.DataFrame({'ds': future_dates})
+    
+    # Add weekend indicator (derived from date)
+    future_df['day_of_week'] = future_df['ds'].dt.dayofweek
+    future_df['is_weekend'] = future_df['day_of_week'].isin([5, 6]).astype(int)
+    
+    # Load calendar data for future holiday/sandwich values
+    try:
+        calendar_df = None
+        calendar_path = 'data/special_days_cl_2022_2040.csv'
+        encodings = ['utf-8', 'utf-8-sig', 'latin-1', 'cp1252']
+        for encoding in encodings:
+            try:
+                calendar_df = pd.read_csv(calendar_path, encoding=encoding)
+                break
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+        
+        if calendar_df is not None:
+            calendar_df['date'] = pd.to_datetime(calendar_df['date'])
+            calendar_df = calendar_df[['date', 'is_public_holiday', 'is_sandwich']].copy()
+            calendar_df.columns = ['ds', 'is_holiday', 'is_sandwich']
+            
+            # Merge future with calendar
+            future_df = future_df.merge(calendar_df, on='ds', how='left')
+        else:
+            future_df['is_holiday'] = 0
+            future_df['is_sandwich'] = 0
+    except FileNotFoundError:
+        future_df['is_holiday'] = 0
+        future_df['is_sandwich'] = 0
+    
+    # Fill any missing regressor values with 0
+    future_df['is_holiday'] = future_df['is_holiday'].fillna(0).astype(int)
+    future_df['is_sandwich'] = future_df['is_sandwich'].fillna(0).astype(int)
+    
+    # Prepare exogenous variables for forecast
+    future_exog = future_df[['is_holiday', 'is_sandwich', 'is_weekend']].values
+    
+    # Generate forecast
+    print(f"Generating {forecast_horizon}-day forecast...")
+    forecast_result = fitted_model.get_forecast(steps=forecast_horizon, exog=future_exog)
+    
+    # Extract predictions and confidence intervals
+    forecast_mean = forecast_result.predicted_mean
+    forecast_ci = forecast_result.conf_int(alpha=0.05)  # 95% confidence interval
+    
+    # Create forecast dataframe
+    forecast_output = pd.DataFrame({
+        'ds': future_dates,
+        'yhat': forecast_mean,
+        'yhat_lower': forecast_ci[:, 0] if isinstance(forecast_ci, np.ndarray) else forecast_ci.iloc[:, 0],
+        'yhat_upper': forecast_ci[:, 1] if isinstance(forecast_ci, np.ndarray) else forecast_ci.iloc[:, 1]
+    })
+    
+    # Add regressor values to output for transparency
+    forecast_output = forecast_output.merge(
+        future_df[['ds', 'is_holiday', 'is_sandwich', 'is_weekend']], 
+        on='ds', 
+        how='left'
+    )
+    
+    # Clip predictions to valid range [0, 1] for occupancy probability
+    forecast_output['yhat'] = forecast_output['yhat'].clip(0, 1)
+    forecast_output['yhat_lower'] = forecast_output['yhat_lower'].clip(0, 1)
+    forecast_output['yhat_upper'] = forecast_output['yhat_upper'].clip(0, 1)
+    
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Generate output filename with timestamp
+    timestamp = datetime.now().strftime('%Y%m%d')
+    output_filename = f'forecast_occupancy_sarimax_{timestamp}.csv'
+    output_path = os.path.join(output_dir, output_filename)
+    
+    # Save forecast to CSV
+    forecast_output.to_csv(output_path, index=False)
+    
+    # Summary statistics
+    avg_prediction = forecast_output['yhat'].mean()
+    min_prediction = forecast_output['yhat'].min()
+    max_prediction = forecast_output['yhat'].max()
+    holidays_in_forecast = forecast_output['is_holiday'].sum()
+    sandwiches_in_forecast = forecast_output['is_sandwich'].sum()
+    weekends_in_forecast = forecast_output['is_weekend'].sum()
+    
+    print(f"✓ Forecast saved: {output_filename}")
+    print(f"  Forecast period: {forecast_output['ds'].min().date()} to {forecast_output['ds'].max().date()}")
+    print(f"  Total days forecasted: {len(forecast_output)}")
+    print(f"  Average predicted occupancy: {avg_prediction:.3f}")
+    print(f"  Range: [{min_prediction:.3f}, {max_prediction:.3f}]")
+    print(f"  Calendar features in forecast period:")
+    print(f"    Holidays: {holidays_in_forecast}")
+    print(f"    Sandwich days: {sandwiches_in_forecast}")
+    print(f"    Weekends: {weekends_in_forecast}")
+    print(f"  Saved to: {output_path}")
+    
+    # Prepare results
+    results = {
+        'model': fitted_model,
+        'forecast': forecast_output,
+        'historical': train_df,
+        'model_summary': fitted_model.summary()
     }
     
     return results

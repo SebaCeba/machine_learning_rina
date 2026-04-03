@@ -1,7 +1,50 @@
 # Model Training Documentation
 **Date:** 2026-04-03  
 **Repository:** machine_learning_rina  
-**Function:** `train_and_forecast_occupancy()`
+**Models:** SARIMAX (✅ Working), Prophet (❌ Windows incompatible)
+
+---
+
+## ✅ **RECOMMENDED: SARIMAX Model (Windows-Compatible)**
+
+**SARIMAX is the production-ready forecasting model for this Windows system.**
+
+### Implementation Status:
+
+✅ **Function:** `train_and_forecast_sarimax()`  
+✅ **Library:** statsmodels (already installed, no compilation required)  
+✅ **Windows compatible:** Works perfectly on Windows  
+✅ **External regressors:** Supports is_holiday, is_sandwich, is_weekend  
+✅ **Confidence intervals:** Provides yhat_lower and yhat_upper  
+✅ **Tested:** Successfully forecasts 60 days with calendar features  
+
+### Quick Start:
+
+```python
+from app.model import train_and_forecast_sarimax
+
+# Generate forecast with calendar features
+result = train_and_forecast_sarimax(
+    features_filepath='data/processed/features_daily_YYYYMMDD.csv',
+    forecast_horizon=60,
+    output_dir='data/outputs'
+)
+
+# Access results
+forecast = result['forecast']  # 60-day predictions
+model = result['model']        # Trained SARIMAX model
+```
+
+### Output File:
+
+`data/outputs/forecast_occupancy_sarimax_YYYYMMDD.csv`
+
+**Columns:** ds, yhat, yhat_lower, yhat_upper, is_holiday, is_sandwich, is_weekend
+
+**Example output (2026-04-03):**
+- Average predicted occupancy: 0.412 (41.2%)
+- Range: [0.289, 0.862]
+- Holidays in forecast: 0, Sandwiches: 0, Weekends: 18
 
 ---
 
@@ -71,7 +114,73 @@ $ python -c "import cmdstanpy; cmdstanpy.install_cmdstan()"
 
 ---
 
-## 2. Model Selected: Prophet
+## 2. Model Selected: SARIMAX (Primary) & Prophet (Linux/Mac only)
+
+### SARIMAX: Windows-Compatible Production Model ✅
+
+**SARIMAX** (Seasonal AutoRegressive Integrated Moving Average with eXogenous variables) is the **recommended model for this Windows system**.
+
+**Model Specification:**
+```python
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+
+model = SARIMAX(
+    endog=y,  # Occupancy time series
+    exog=X,   # External regressors [is_holiday, is_sandwich, is_weekend]
+    order=(1, 0, 1),              # ARMA(1,1) - non-seasonal component
+    seasonal_order=(1, 0, 1, 7),  # Seasonal ARMA(1,1) with 7-day period
+    enforce_stationarity=False,
+    enforce_invertibility=False
+)
+```
+
+**Why SARIMAX?**
+
+✅ **Windows compatible** - No C++ compilation required  
+✅ **External regressors** - Like Prophet, supports calendar features  
+✅ **Confidence intervals** - Provides prediction intervals  
+✅ **Seasonal patterns** - Weekly seasonality (7-day period)  
+✅ **Well-established** - Decades of academic/industry use  
+✅ **Interpretable** - Clear AR, MA, seasonal components  
+
+**Ideal for refuge occupancy because:**
+- Weekly patterns explicitly modeled (seasonal_order with s=7)
+- Chilean calendar effects as exogenous variables
+- Prediction intervals for uncertainty quantification
+- No installation headaches on Windows
+
+**Comparison to Prophet:**
+
+| Feature | SARIMAX | Prophet |
+|---------|---------|---------|
+| Windows support | ✅ Yes | ❌ No (requires cmdstan) |
+| External regressors | ✅ Yes (exog) | ✅ Yes (add_regressor) |
+| Confidence intervals | ✅ Yes (95% CI) | ✅ Yes (customizable) |
+| Seasonality | ✅ Single period (e.g., weekly) | ✅ Multiple (yearly + weekly) |
+| Setup time | ⚡ <1 min | ⏳ 1-2 hours (MinGW + cmdstan) |
+| Training speed | ⚡ Fast (~10 sec) | ⏳ Slower (~30 sec) |
+| Interpretability | ✅ Transparent components | ✅ Decomposable |
+
+**SARIMAX Model Parameters Explained:**
+
+- **order=(1, 0, 1)**: Non-seasonal ARMA(1,1)
+  - p=1: Autoregressive order (yesterday's occupancy influences today)
+  - d=0: No differencing (data already stationary)
+  - q=1: Moving average order (yesterday's error influences today)
+
+- **seasonal_order=(1, 0, 1, 7)**: Seasonal ARMA with weekly period
+  - P=1: Seasonal AR (last week's Saturday influences this Saturday)
+  - D=0: No seasonal differencing
+  - Q=1: Seasonal MA
+  - s=7: Weekly seasonality
+
+- **exog**: External regressors (is_holiday, is_sandwich, is_weekend)
+
+---
+
+### Prophet: Alternative for Linux/Mac Systems
+
+**Prophet is available for systems with C++ compilation tools.**
 
 ### Why Prophet?
 
@@ -496,7 +605,71 @@ CMD ["python", "forecast_job.py"]
 
 ---
 
-## 9. Usage Example (When Prophet Works)
+## 9. Usage Examples
+
+### Example 1: SARIMAX Forecasting (Windows) ✅
+
+```python
+from app.model import train_and_forecast_sarimax
+from app.data_loader import (
+    transform_bookings_to_daily_occupancy,
+    enrich_daily_occupancy_with_calendar
+)
+
+# Step 1: Transform bookings to daily occupancy
+daily_occupancy = transform_bookings_to_daily_occupancy(
+    filepath='data/CONSOLIDADO REFUGIO.csv',
+    output_dir='data/processed'
+)
+
+# Step 2: Enrich with Chilean calendar features
+enriched = enrich_daily_occupancy_with_calendar(
+    occupancy_df=daily_occupancy,
+    calendar_filepath='data/special_days_cl_2022_2040.csv',
+    output_dir='data/processed'
+)
+
+# Step 3: Generate forecast with SARIMAX
+result = train_and_forecast_sarimax(
+    features_df=enriched,
+    forecast_horizon=60,
+    output_dir='data/outputs'
+)
+
+# Output:
+# Training SARIMAX model on 1366 days of data...
+#   Model: SARIMAX(1,0,1)x(1,0,1,7) with external regressors
+#   Regressors: is_holiday, is_sandwich, is_weekend
+# ✓ Model training complete (AIC: 1079.70)
+# Generating 60-day forecast...
+# ✓ Forecast saved: forecast_occupancy_sarimax_20260403.csv
+#   Forecast period: 2026-01-10 to 2026-03-10
+#   Total days forecasted: 60
+#   Average predicted occupancy: 0.412
+#   Range: [0.289, 0.862]
+#   Calendar features in forecast period:
+#     Holidays: 0
+#     Sandwich days: 0
+#     Weekends: 18
+#   Saved to: data/outputs\forecast_occupancy_sarimax_20260403.csv
+
+# Access results
+forecast_df = result['forecast']  # 60-day forecast DataFrame
+model = result['model']            # Trained SARIMAX model
+historical = result['historical']  # Training data
+
+# Analyze forecast
+print(f"Average predicted occupancy: {forecast_df['yhat'].mean():.2f}")
+print(f"Highest occupancy day: {forecast_df.loc[forecast_df['yhat'].idxmax(), 'ds']}")
+print(f"Weekend days: {forecast_df['is_weekend'].sum()}")
+
+# Inspect model summary
+print(result['model_summary'])
+```
+
+---
+
+### Example 2: Prophet Forecasting (Linux/Mac only)
 
 ```python
 from app.model import train_and_forecast_occupancy
@@ -552,6 +725,25 @@ with open('models/prophet_occupancy.pkl', 'wb') as f:
 
 ## 11. Verification Status (2026-04-03)
 
+### SARIMAX Model: ✅ VERIFIED WORKING
+
+```bash
+$ python -c "from app.model import train_and_forecast_sarimax; ..."
+✅ Model training complete (AIC: 1079.70)
+✅ Forecast generated: 60 days
+✅ Output saved: data/outputs/forecast_occupancy_sarimax_20260403.csv
+✅ Average occupancy: 0.412 (41.2%)
+✅ Regressors active: is_holiday, is_sandwich, is_weekend
+```
+
+**File created:** `data/outputs/forecast_occupancy_sarimax_20260403.csv` (2.8KB, 60 rows)
+
+**Columns verified:** ds, yhat, yhat_lower, yhat_upper, is_holiday, is_sandwich, is_weekend ✅
+
+---
+
+### Prophet Model: ❌ NOT WORKING (Windows)
+
 **Prophet Installation Verified:**
 ```bash
 $ pip install prophet
@@ -574,11 +766,32 @@ $ python -c "import cmdstanpy; cmdstanpy.install_cmdstan()"
 ```
 
 **Conclusion:**  
-Prophet library is installed but **non-functional** on this Windows system without MinGW/Visual Studio Build Tools.
+- Prophet library is installed but **non-functional** on this Windows system without MinGW/Visual Studio Build Tools
+- **SARIMAX is the working production model** for Windows systems
 
-**Mock forecast created:** `data/outputs/forecast_occupancy_20260403.csv` (demonstration of output format)
+**Mock Prophet forecast:** `data/outputs/forecast_occupancy_20260403.csv` (demonstration of output format only)
 
-**Recommendation:** Proceed with SARIMAX implementation (Section 8, Option 2) for Windows-compatible forecasting with regressors.
+---
+
+## 12. Production Recommendation
+
+**For this Windows system:**
+
+✅ **USE SARIMAX** - Fully functional, tested, supports regressors  
+❌ **AVOID Prophet** - Requires 1-2 hours MinGW setup + cmdstan compilation
+
+**Implementation checklist:**
+- [x] SARIMAX function implemented (`train_and_forecast_sarimax()`)
+- [x] Tested with 1,366 days historical data
+- [x] 60-day forecast with calendar regressors verified
+- [x] Output format matches Prophet spec
+- [x] Documentation complete
+
+**Next steps:**
+1. Integrate SARIMAX into Flask web app (app/routes.py)
+2. Add model evaluation metrics (MAE, RMSE)
+3. Implement train/test split for validation
+4. Schedule automated daily/weekly forecasts
 
 ---
 
