@@ -1,8 +1,9 @@
 from flask import Blueprint, render_template, request, current_app
 import os
+import pandas as pd
 from datetime import datetime
-from app.data_loader import parse_csv, convert_to_daily_timeseries
-from app.model import train_forecast_model, save_model
+from app.data_loader import parse_csv, transform_bookings_to_daily_occupancy, enrich_daily_occupancy_with_calendar
+from app.model import train_and_forecast_sarimax, save_model
 
 bp = Blueprint('main', __name__)
 
@@ -23,7 +24,7 @@ def index():
         
         try:
             # Save uploaded file
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = datetime.now().strftime('%Y%m%d')
             filename = f'bookings_{timestamp}.csv'
             filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
@@ -31,35 +32,48 @@ def index():
             # Parse CSV
             df = parse_csv(filepath)
             
-            # Convert to daily time series
-            daily_data = convert_to_daily_timeseries(df)
+            # Transform bookings to daily occupancy
+            occupancy_filepath = os.path.join('data/processed', f'bookings_daily_occupancy_{timestamp}.csv')
+            daily_occupancy = transform_bookings_to_daily_occupancy(df, output_filepath=occupancy_filepath)
             
-            # Train model and forecast
-            results = train_forecast_model(daily_data, periods=30)
+            # Enrich with Chilean calendar context
+            features_filepath = os.path.join('data/processed', f'features_daily_{timestamp}.csv')
+            calendar_filepath = 'data/special_days_cl_2022_2040.csv'
+            enriched_data = enrich_daily_occupancy_with_calendar(
+                daily_occupancy_filepath=occupancy_filepath,
+                calendar_filepath=calendar_filepath,
+                output_filepath=features_filepath
+            )
             
-            # Save model
-            model_filename = f'forecast_model_{timestamp}.pkl'
-            model_path = os.path.join(current_app.config['MODEL_FOLDER'], model_filename)
-            save_model(results['model'], model_path)
+            # Train SARIMAX model and forecast 60 days
+            forecast_df = train_and_forecast_sarimax(
+                features_filepath=features_filepath,
+                forecast_horizon=60,
+                output_dir='data/outputs'
+            )
             
-            # Prepare forecast data for display
-            forecast_df = results['forecast']
-            
-            # Get only future predictions (last 30 days)
-            future_forecast = forecast_df.tail(30)
-            
-            # Prepare historical data
-            historical = results['historical'].tail(30)  # Last 30 days of historical
+            # Prepare historical data (last 30 days)
+            historical = enriched_data.tail(30)
             
             # Convert to list of dicts for template
-            forecast_data = future_forecast.to_dict('records')
+            forecast_data = forecast_df.to_dict('records')
             historical_data = historical.to_dict('records')
+            
+            # Statistics for display
+            total_days = len(enriched_data)
+            occupied_days = int(enriched_data['y'].sum())
+            occupancy_rate = (occupied_days / total_days * 100) if total_days > 0 else 0
+            avg_forecast_occupancy = forecast_df['yhat'].mean() * 100
             
             return render_template(
                 'index.html',
                 forecast=forecast_data,
                 historical=historical_data,
-                model_saved=model_filename,
+                total_days=total_days,
+                occupied_days=occupied_days,
+                occupancy_rate=occupancy_rate,
+                avg_forecast_occupancy=avg_forecast_occupancy,
+                forecast_days=len(forecast_df),
                 success=True
             )
             
