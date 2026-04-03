@@ -4,3 +4,4 @@ numpy==1.24.4
 pandas==2.0.3
 scipy==1.11.3
 statsmodels==0.14.0
+# prophet==1.1.4  # Optional: Requires cmdstan (compilation tools on Windows)
