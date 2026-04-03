@@ -5,6 +5,7 @@ __pycache__/
 venv/
 env/
 data/*.csv
+!data/sample_bookings.csv
 models/*.pkl
 *.log
 .DS_Store

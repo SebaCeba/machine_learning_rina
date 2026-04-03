@@ -1,0 +1,2 @@
+# This file ensures the models folder is tracked by git
+# Trained models (.pkl files) will be ignored by .gitignore
