@@ -5,8 +5,16 @@ def parse_csv(filepath):
     """
     Parse CSV file and extract required fields.
     Expected columns: check_in, check_out, noches, ingresos_total
+    Supports both comma (,) and semicolon (;) separators.
+    Supports multiple date formats.
     """
-    df = pd.read_csv(filepath)
+    # Try to detect separator
+    with open(filepath, 'r', encoding='utf-8-sig') as f:
+        first_line = f.readline()
+        separator = ';' if ';' in first_line else ','
+    
+    # Read CSV with detected separator and encoding
+    df = pd.read_csv(filepath, sep=separator, encoding='utf-8-sig')
     
     # Validate required columns
     required_cols = ['check_in', 'check_out', 'noches', 'ingresos_total']
@@ -14,9 +22,20 @@ def parse_csv(filepath):
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
     
-    # Convert dates
-    df['check_in'] = pd.to_datetime(df['check_in'])
-    df['check_out'] = pd.to_datetime(df['check_out'])
+    # Convert dates - try multiple formats
+    date_formats = ['%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y']
+    for col in ['check_in', 'check_out']:
+        df[col] = pd.to_datetime(df[col], format='mixed', dayfirst=True, errors='coerce')
+    
+    # Remove rows with invalid dates
+    df = df.dropna(subset=['check_in', 'check_out'])
+    
+    # Ensure noches is numeric
+    df['noches'] = pd.to_numeric(df['noches'], errors='coerce')
+    df['ingresos_total'] = pd.to_numeric(df['ingresos_total'], errors='coerce')
+    
+    # Remove rows with invalid numeric data
+    df = df.dropna(subset=['noches', 'ingresos_total'])
     
     return df
 
@@ -24,8 +43,10 @@ def convert_to_daily_timeseries(df):
     """
     Convert booking data into daily time series (date, revenue).
     Distribute revenue across the nights stayed.
+    Handles edge cases like noches=0.
     """
     daily_data = []
+    skipped_records = 0
     
     for _, row in df.iterrows():
         check_in = row['check_in']
@@ -34,7 +55,16 @@ def convert_to_daily_timeseries(df):
         noches = row['noches']
         
         # Skip invalid records
-        if noches <= 0 or pd.isna(total_revenue):
+        if pd.isna(total_revenue) or total_revenue <= 0:
+            skipped_records += 1
+            continue
+        
+        # Handle noches=0 by assigning revenue to check-in date
+        if noches <= 0:
+            daily_data.append({
+                'date': check_in,
+                'revenue': total_revenue
+            })
             continue
         
         # Distribute revenue per night
@@ -53,10 +83,12 @@ def convert_to_daily_timeseries(df):
     daily_df = pd.DataFrame(daily_data)
     
     if daily_df.empty:
-        raise ValueError("No valid data to process")
+        raise ValueError(f"No valid data to process. Skipped {skipped_records} invalid records.")
     
     # Group by date and sum revenue
     daily_aggregated = daily_df.groupby('date')['revenue'].sum().reset_index()
     daily_aggregated.columns = ['ds', 'y']  # Prophet naming convention
+    
+    print(f"Processed {len(daily_df)} daily records from {len(df)} bookings (skipped {skipped_records})")
     
     return daily_aggregated
