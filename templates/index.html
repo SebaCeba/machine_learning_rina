@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Forecasting Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+        }
+        .upload-section {
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .results-section {
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .error {
+            color: red;
+            padding: 10px;
+            background-color: #ffe6e6;
+            border-radius: 3px;
+        }
+        .success {
+            color: green;
+            padding: 10px;
+            background-color: #e6ffe6;
+            border-radius: 3px;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .chart {
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+        .info {
+            background-color: #e7f3fe;
+            padding: 10px;
+            border-radius: 3px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 Sales Forecasting Tool</h1>
+    
+    <div class="upload-section">
+        <h2>Upload Historical Data</h2>
+        <div class="info">
+            <strong>CSV Format:</strong> Debe incluir columnas: <code>check_in</code>, <code>check_out</code>, <code>noches</code>, <code>ingresos_total</code>
+        </div>
+        
+        <form method="POST" enctype="multipart/form-data">
+            <input type="file" name="file" accept=".csv" required>
+            <button type="submit">Upload and Forecast</button>
+        </form>
+        
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+        
+        {% if success %}
+        <div class="success">
+            Forecast generated successfully! Model saved as: {{ model_saved }}
+        </div>
+        {% endif %}
+    </div>
+    
+    {% if historical %}
+    <div class="results-section">
+        <h2>Recent Historical Data (Last 30 Days)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Revenue</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in historical %}
+                <tr>
+                    <td>{{ row.ds.strftime('%Y-%m-%d') if row.ds.strftime else row.ds }}</td>
+                    <td>${{ "%.2f"|format(row.y) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    
+    {% if forecast %}
+    <div class="results-section">
+        <h2>30-Day Forecast</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Predicted Revenue</th>
+                    <th>Lower Bound</th>
+                    <th>Upper Bound</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in forecast %}
+                <tr>
+                    <td>{{ row.ds.strftime('%Y-%m-%d') if row.ds.strftime else row.ds }}</td>
+                    <td>${{ "%.2f"|format(row.yhat) }}</td>
+                    <td>${{ "%.2f"|format(row.yhat_lower) }}</td>
+                    <td>${{ "%.2f"|format(row.yhat_upper) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</body>
+</html>
