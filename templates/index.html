@@ -80,6 +80,54 @@
             border-radius: 3px;
             margin-bottom: 15px;
         }
+        .compare-section {
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196F3;
+        }
+        .compare-section h2 {
+            color: #1565C0;
+        }
+        .compare-section .info {
+            background-color: #e3f2fd;
+        }
+        .compare-section button {
+            background-color: #2196F3;
+        }
+        .compare-section button:hover {
+            background-color: #1976D2;
+        }
+        .metrics-grid {
+            display: flex;
+            gap: 20px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+        .metric-card {
+            background: #f0f8ff;
+            border: 1px solid #bbdefb;
+            border-radius: 6px;
+            padding: 15px 25px;
+            text-align: center;
+            min-width: 150px;
+        }
+        .metric-card .metric-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #1565C0;
+        }
+        .metric-card .metric-label {
+            font-size: 0.85em;
+            color: #555;
+            margin-top: 4px;
+        }
+        th.compare-th {
+            background-color: #2196F3;
+        }
+        .match-yes { color: #2e7d32; font-weight: bold; }
+        .match-no  { color: #c62828; }
     </style>
 </head>
 <body>
@@ -171,6 +219,94 @@
                 {% endfor %}
             </tbody>
         </table>
+    </div>
+    {% endif %}
+
+    <!-- ============================================================
+         COMPARE SECTION – upload real bookings vs latest forecast
+         ============================================================ -->
+    <div class="compare-section">
+        <h2>📊 Comparar Pronóstico con Datos Reales</h2>
+        <div class="info">
+            <strong>Archivo:</strong> CSV con reservas reales (mismas columnas que el archivo histórico)<br>
+            <strong>Columnas requeridas:</strong> <code>check_in</code>, <code>check_out</code>, <code>noches</code><br>
+            <strong>Fechas:</strong> DD-MM-YYYY o YYYY-MM-DD &nbsp;|&nbsp; <strong>Separador:</strong> coma (,) o punto y coma (;)<br>
+            <em>Se requiere que ya exista un pronóstico generado en <code>data/outputs/</code>.</em>
+        </div>
+
+        <form method="POST" action="/compare" enctype="multipart/form-data">
+            <input type="file" name="actual_file" accept=".csv" required>
+            <button type="submit">Comparar con Pronóstico</button>
+        </form>
+
+        {% if compare_error %}
+        <div class="error" style="margin-top:10px;">❌ {{ compare_error }}</div>
+        {% endif %}
+
+        {% if compare_success %}
+        <div class="success" style="margin-top:10px;">
+            ✅ Comparación completada. Archivo guardado en <code>data/outputs/</code>.
+        </div>
+        {% endif %}
+    </div>
+
+    {% if metrics %}
+    <div class="results-section">
+        <h2>📈 Resumen de Comparación</h2>
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-value">{{ metrics.total_days_compared }}</div>
+                <div class="metric-label">Días Comparados</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">{{ "%.1f"|format(metrics.binary_accuracy) }}%</div>
+                <div class="metric-label">Precisión Binaria</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">{{ "%.3f"|format(metrics.mae) }}</div>
+                <div class="metric-label">MAE (Error Absoluto Medio)</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if comparison %}
+    <div class="results-section">
+        <h2>Detalle Día a Día: Real vs Pronóstico</h2>
+        <div style="overflow-x:auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th class="compare-th">Fecha</th>
+                    <th class="compare-th">Real</th>
+                    <th class="compare-th">yhat</th>
+                    <th class="compare-th">yhat_lower</th>
+                    <th class="compare-th">yhat_upper</th>
+                    <th class="compare-th">Pred. Binaria</th>
+                    <th class="compare-th">Error</th>
+                    <th class="compare-th">Error Abs.</th>
+                    <th class="compare-th">¿Coincide?</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in comparison %}
+                <tr>
+                    <td>{{ row.ds.strftime('%Y-%m-%d') if row.ds.strftime else row.ds }}</td>
+                    <td>{{ row.y_real }}</td>
+                    <td>{{ "%.3f"|format(row.yhat) }}</td>
+                    <td>{{ "%.3f"|format(row.yhat_lower) }}</td>
+                    <td>{{ "%.3f"|format(row.yhat_upper) }}</td>
+                    <td>{{ row.yhat_binary }}</td>
+                    <td>{{ "%.3f"|format(row.error) }}</td>
+                    <td>{{ "%.3f"|format(row.abs_error) }}</td>
+                    <td class="{{ 'match-yes' if row.match_binary == 1 else 'match-no' }}">
+                        {{ "✅" if row.match_binary == 1 else "❌" }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
     </div>
     {% endif %}
 </body>

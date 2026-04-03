@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 from app.data_loader import transform_bookings_to_daily_occupancy, enrich_daily_occupancy_with_calendar
 from app.model import train_and_forecast_sarimax
+from app.comparison import run_comparison
 
 bp = Blueprint('main', __name__)
 
@@ -82,3 +83,45 @@ def index():
             return render_template('index.html', error=f'Error processing file: {str(e)}')
     
     return render_template('index.html')
+
+
+@bp.route('/compare', methods=['POST'])
+def compare():
+    """Upload real booking data and compare against the latest forecast."""
+    if 'actual_file' not in request.files:
+        return render_template('index.html', compare_error='No se subió ningún archivo de datos reales.')
+
+    file = request.files['actual_file']
+
+    if file.filename == '':
+        return render_template('index.html', compare_error='No se seleccionó ningún archivo.')
+
+    if not file.filename.lower().endswith('.csv'):
+        return render_template('index.html', compare_error='El archivo debe ser un CSV.')
+
+    try:
+        from werkzeug.utils import secure_filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'actuals_upload_{timestamp}.csv'
+        filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+
+        comparison_df, metrics = run_comparison(
+            booking_filepath=filepath,
+            outputs_dir='data/outputs',
+            processed_dir='data/processed',
+        )
+
+        comparison_data = comparison_df.to_dict('records')
+
+        return render_template(
+            'index.html',
+            comparison=comparison_data,
+            metrics=metrics,
+            compare_success=True,
+        )
+
+    except (FileNotFoundError, ValueError) as e:
+        return render_template('index.html', compare_error=str(e))
+    except Exception as e:
+        return render_template('index.html', compare_error=f'Error inesperado: {str(e)}')
