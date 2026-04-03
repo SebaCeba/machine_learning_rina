@@ -5,28 +5,49 @@
 
 ---
 
-## ⚠️ **IMPORTANT: Prophet Limitation on Windows** ⚠️
+## ⚠️ **IMPORTANT: Prophet Status on Windows** ⚠️
 
-**Prophet does NOT work on this Windows system due to missing C++ compilation tools.**
+**Prophet library installs successfully but CANNOT RUN on this Windows system due to missing cmdstan backend.**
 
-The documentation (docs/repo_state_audit.md) confirms that Prophet was previously attempted and abandoned in favor of Holt-Winters due to Windows compilation issues. This implementation provides the Prophet forecasting code for systems where it CAN work (Linux, Mac, Docker), but includes proper error handling and alternative recommendations for Windows users.
+### Current Situation:
+
+✅ **Prophet package installed:** `pip install prophet` works  
+❌ **cmdstan backend missing:** Prophet cannot initialize  
+❌ **C++ compiler unavailable:** cmdstan requires mingw32-make (MinGW) or Visual Studio Build Tools  
+❌ **Forecasting fails:** `AttributeError: 'Prophet' object has no attribute 'stan_backend'`
 
 ### Why Prophet Fails on Windows:
 
-1. **Missing cmdstan**: Prophet requires cmdstan backend for Bayesian inference
-2. **No C++ compiler**: cmdstan needs mingw32-make or Visual Studio Build Tools
-3. **Installation error**: `mingw32-make: command not found`
+1. **Prophet is just a Python wrapper** around Stan (Bayesian inference engine)
+2. **Stan requires cmdstan** which must be compiled from C++ source code
+3. **cmdstan installation fails:** `mingw32-make: command not found`
+4. **No C++ compiler on system:** Windows lacks gcc/g++/make by default
 
-### Recommended Solutions:
+### Verified Error:
 
-| Solution | Complexity | When to Use |
-|----------|-----------|-------------|
-| **Use Holt-Winters** (current model) | Low | Windows development, simple occupancy forecasting |
-| **Run in Docker** | Medium | Need Prophet features, prefer containerization |
-| **Use Linux/Mac** | Medium | Have access to Unix system or WSL2 |
-| **Cloud deployment** | Medium-High | Production forecasting pipeline |
+```bash
+$ python -m pip install prophet
+# ✅ Installation succeeds
 
-See section 7 for detailed alternative approaches.
+$ python -c "from prophet import Prophet; model = Prophet()"
+# ❌ AttributeError: 'Prophet' object has no attribute 'stan_backend'
+
+$ python -c "import cmdstanpy; cmdstanpy.install_cmdstan()"
+# ❌ Command "make build" failed
+# ❌ [WinError 2] El sistema no puede encontrar el archivo especificado
+```
+
+### Solutions for Windows Users:
+
+| Solution | Complexity | Status | Recommendation |
+|----------|-----------|--------|-----------------|
+| **Install MinGW or Visual Studio Build Tools** | High | Untested | Requires ~5GB download + configuration |
+| **Use SARIMAX** (see Section 8, Option 2) | Low | **RECOMMENDED** | Works on Windows, supports regressors |
+| **Use Docker** (see Section 8, Option 4) | Medium | Proven | Prophet works in Linux container |
+| **Deploy to cloud** (Linux VM) | Medium | Proven | Prophet works on Linux |
+| **Use current Holt-Winters model** | Low | Working | No regressors but functional |
+
+**Documentation below describes Prophet implementation for systems where it DOES work (Linux/Mac/Docker).**
 
 ---
 
@@ -388,7 +409,58 @@ future_features = create_future_features(60)  # Generate future X
 forecast = model.predict_proba(future_features)[:, 1]  # Probability of y=1
 ```
 
-### Option 4: Docker with Prophet (Recommended for Production)
+### Option 4: Enable Prophet on Windows (Advanced)
+
+**If you want to use Prophet on this Windows system, follow these steps:**
+
+#### Step 1: Install MinGW-w64 (C++ Compiler)
+
+Download from: https://www.mingw-w64.org/
+
+Or use package manager:
+```bash
+# Using Chocolatey
+choco install mingw
+
+# Using MSYS2
+pacman -S mingw-w64-x86_64-toolchain
+```
+
+#### Step 2: Add MinGW to PATH
+
+Add to Windows PATH environment variable:
+```
+C:\mingw64\bin
+# or wherever MinGW is installed
+```
+
+Verify installation:
+```bash
+mingw32-make --version  # Should show version info
+```
+
+#### Step 3: Install cmdstan
+
+```bash
+python -c "import cmdstanpy; cmdstanpy.install_cmdstan()"
+# This will compile cmdstan (may take 5-10 minutes)
+```
+
+#### Step 4: Test Prophet
+
+```python
+from prophet import Prophet
+model = Prophet()
+print("Prophet ready!")
+```
+
+**Expected effort:** 1-2 hours (download ~5GB, configure PATH, compile cmdstan)
+
+**Recommendation:** Only pursue if you specifically need Prophet features. SARIMAX (Option 2) is faster to set up and provides similar capabilities.
+
+---
+
+### Option 5: Docker with Prophet (Recommended for Production)
 
 **Dockerfile:**
 ```dockerfile
@@ -475,6 +547,38 @@ with open('models/prophet_occupancy.pkl', 'wb') as f:
 - **Repository audit:** See `docs/repo_state_audit.md`
 - **Features dataset:** `data/processed/features_daily_YYYYMMDD.csv`
 - **Forecast code:** `app/model.py::train_and_forecast_occupancy()`
+
+---
+
+## 11. Verification Status (2026-04-03)
+
+**Prophet Installation Verified:**
+```bash
+$ pip install prophet
+✅ Successfully installed prophet-1.1.4
+
+$ python -c "from prophet import Prophet"
+✅ Import succeeds (plotly warning is cosmetic)
+
+$ python -c "from prophet import Prophet; model = Prophet()"
+❌ AttributeError: 'Prophet' object has no attribute 'stan_backend'
+```
+
+**cmdstan Backend Status:**
+```bash
+$ python -c "import cmdstanpy; cmdstanpy.install_cmdstan()"
+❌ CmdStan installation failed
+❌ Command "make build" failed
+❌ Command: ['mingw32-make', 'build', '-j1']
+❌ [WinError 2] El sistema no puede encontrar el archivo especificado
+```
+
+**Conclusion:**  
+Prophet library is installed but **non-functional** on this Windows system without MinGW/Visual Studio Build Tools.
+
+**Mock forecast created:** `data/outputs/forecast_occupancy_20260403.csv` (demonstration of output format)
+
+**Recommendation:** Proceed with SARIMAX implementation (Section 8, Option 2) for Windows-compatible forecasting with regressors.
 
 ---
 

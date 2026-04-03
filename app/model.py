@@ -139,12 +139,14 @@ def train_and_forecast_occupancy(
     # Check if Prophet is available
     if not PROPHET_AVAILABLE:
         raise ImportError(
-            "Prophet is not available. This is a known issue on Windows systems "
-            "that lack C++ compilation tools (mingw, Visual Studio Build Tools). "
-            "\nSolutions:"
-            "\n1. Install on Linux/Mac where Prophet works without compilation issues"
-            "\n2. Use Docker with a pre-built Prophet image"
-            "\n3. Use alternative forecasting approach (see docs/model_training.md)"
+            "Prophet library is not installed or failed to import. "
+            "\nOn Windows, Prophet installs but requires cmdstan backend (C++ compilation)."
+            "\nCurrent system lacks MinGW or Visual Studio Build Tools needed for cmdstan."
+            "\n\nSolutions:"
+            "\n1. Use SARIMAX alternative (see docs/model_training.md Section 8, Option 2)"
+            "\n2. Run in Docker with Linux container"
+            "\n3. Use cloud deployment (Linux VM)"
+            "\n4. Install MinGW: https://www.mingw-w64.org/ (requires ~5GB + configuration)"
         )
     
     # Prepare training data (Prophet requires 'ds' and 'y')
@@ -162,9 +164,19 @@ def train_and_forecast_occupancy(
         )
     except AttributeError as e:
         raise RuntimeError(
-            f"Prophet initialization failed: {e}. "
-            "This typically means cmdstan is not properly installed. "
-            "See docs/model_training.md for Windows-specific troubleshooting."
+            f"Prophet initialization failed: {e}"
+            "\n\nROOT CAUSE: cmdstan backend is not installed/compiled."
+            "\nProphet library is installed but cannot run without cmdstan."
+            "\n\nWhy cmdstan failed:"
+            "\n- Command 'mingw32-make' not found on Windows system"
+            "\n- Requires MinGW (gcc/g++/make) or Visual Studio Build Tools"
+            "\n\nQuick fix options:"
+            "\n1. RECOMMENDED: Use SARIMAX instead (works on Windows, supports regressors)"
+            "\n   See docs/model_training.md Section 8, Option 2"
+            "\n2. Install MinGW-w64 from https://www.mingw-w64.org/ then run:"
+            "\n   python -c 'import cmdstanpy; cmdstanpy.install_cmdstan()'"
+            "\n3. Use Docker (Prophet works in Linux containers)"
+            "\n\nFor detailed troubleshooting: docs/model_training.md"
         )
     
     # Add external regressors
