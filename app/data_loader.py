@@ -43,10 +43,11 @@ def convert_to_daily_timeseries(df):
     """
     Convert booking data into daily time series (date, revenue).
     Distribute revenue across the nights stayed.
-    Handles edge cases like noches=0.
+    Treats noches=0 as cancellations (excluded from forecast).
     """
     daily_data = []
     skipped_records = 0
+    cancellations = 0
     
     for _, row in df.iterrows():
         check_in = row['check_in']
@@ -59,12 +60,9 @@ def convert_to_daily_timeseries(df):
             skipped_records += 1
             continue
         
-        # Handle noches=0 by assigning revenue to check-in date
+        # Treat noches=0 as cancellations - exclude from analysis
         if noches <= 0:
-            daily_data.append({
-                'date': check_in,
-                'revenue': total_revenue
-            })
+            cancellations += 1
             continue
         
         # Distribute revenue per night
@@ -83,12 +81,13 @@ def convert_to_daily_timeseries(df):
     daily_df = pd.DataFrame(daily_data)
     
     if daily_df.empty:
-        raise ValueError(f"No valid data to process. Skipped {skipped_records} invalid records.")
+        raise ValueError(f"No valid data to process. {cancellations} cancellations, {skipped_records} invalid records.")
     
     # Group by date and sum revenue
     daily_aggregated = daily_df.groupby('date')['revenue'].sum().reset_index()
     daily_aggregated.columns = ['ds', 'y']  # Prophet naming convention
     
-    print(f"Processed {len(daily_df)} daily records from {len(df)} bookings (skipped {skipped_records})")
+    print(f"✓ Processed {len(daily_df)} daily records from {len(df)} bookings")
+    print(f"✗ Excluded: {cancellations} cancellations, {skipped_records} invalid records")
     
     return daily_aggregated
