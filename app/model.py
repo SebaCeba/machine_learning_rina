@@ -298,11 +298,14 @@ def train_and_forecast_sarimax(
         output_dir (str): Directory to save forecast output (default: 'data/outputs')
     
     Returns:
-        dict: {
-            'model': Trained SARIMAX model,
-            'forecast': Forecast dataframe with predictions,
-            'historical': Historical data used for training
-        }
+        pd.DataFrame: Forecast dataframe with columns:
+            - ds: Date
+            - yhat: Predicted occupancy probability [0, 1]
+            - yhat_lower: Lower bound of 95% confidence interval
+            - yhat_upper: Upper bound of 95% confidence interval
+            - is_holiday: Holiday indicator
+            - is_sandwich: Sandwich day indicator
+            - is_weekend: Weekend indicator
     
     Features used as exogenous variables:
         - is_holiday: Official Chilean public holidays
@@ -484,12 +487,5 @@ def train_and_forecast_sarimax(
     print(f"    Weekends: {weekends_in_forecast}")
     print(f"  Saved to: {output_path}")
     
-    # Prepare results
-    results = {
-        'model': fitted_model,
-        'forecast': forecast_output,
-        'historical': train_df,
-        'model_summary': fitted_model.summary()
-    }
-    
-    return results
+    # Return only the forecast DataFrame for web integration
+    return forecast_output
